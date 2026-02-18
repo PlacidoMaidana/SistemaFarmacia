@@ -33,12 +33,20 @@ Route::group(['prefix' => 'admin'], function () {
     Voyager::routes();
 });
 
+Route::group(['prefix' => 'admin', 'middleware' => 'admin.user'], function () {
+    Voyager::routes();  // CRUD estándar para dispensaciones
+
+    // Rutas para vistas personalizadas de dispensaciones por origen
+    Route::get('/dispensaciones/origen', [DispensacionController::class, 'porOrigen'])->name('dispensaciones.por_origen');
+});
+
+
 Route::group(['middleware' => ['auth', 'admin.user']], function () {
     
     // Rutas de Dispensaciones (Módulo Centralizado)
     Route::prefix('dispensaciones')->name('dispensaciones.')->group(function () {
         Route::get('/', [DispensacionController::class, 'index'])->name('index');
-        Route::get('/origen', [DispensacionController::class, 'porOrigen'])->name('por-origen');
+        Route::get('/origen', [DispensacionController::class, 'porOrigen'])->name('dispensaciones.por-origen');
         Route::get('/create', [DispensacionController::class, 'create'])->name('create');
         Route::post('/', [DispensacionController::class, 'store'])->name('store');
         Route::delete('/{id}', [DispensacionController::class, 'destroy'])->name('destroy');

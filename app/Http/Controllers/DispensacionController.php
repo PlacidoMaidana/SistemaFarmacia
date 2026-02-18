@@ -2,226 +2,131 @@
 
 namespace App\Http\Controllers;
 
+use TCG\Voyager\Http\Controllers\VoyagerBaseController;
+use Illuminate\Http\Request;
 use App\Models\Dispensacion;
 use App\Models\Receta;
 use App\Models\TratamientoCronico;
-use App\Models\Medicamento;
-use App\Models\MaterialesEnfermeria;
-use App\Models\Interno;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
-class DispensacionController extends Controller
+class DispensacionController extends VoyagerBaseController
 {
-    /**
-     * Mostrar dispensaciones filtradas por origen
-     */
+    // Método porOrigen (corrige el error - lista dispensaciones por origen)
     public function porOrigen(Request $request)
     {
-        $tipoOrigen = $request->get('tipo_origen');
-        $idOrigen = $request->get('id_origen');
+        $request->validate([
+            'tipo_origen' => 'required|in:receta,tratamiento_cronicos,suministros_enfermeria',
+            'id_origen' => 'required|integer',
+        ]);
 
-        // Validar parámetros
-        if (!$tipoOrigen || !$idOrigen) {
-            return redirect()->back()->with('error', 'Parámetros inválidos');
-        }
-
-        // Obtener información del origen
-        $origen = null;
-        $tituloOrigen = '';
-        
-        switch ($tipoOrigen) {
-            case 'receta':
-                $origen = Receta::with(['interno', 'medico'])->find($idOrigen);
-                if ($origen) {
-                    $tituloOrigen = "Receta #{$origen->id_receta} - {$origen->interno->nombre_completo}";
-                }
-                break;
-            case 'tratamiento':
-                $origen = TratamientoCronico::with(['interno', 'medicamento'])->find($idOrigen);
-                if ($origen) {
-                    $tituloOrigen = "Tratamiento Crónico #{$origen->id_tratamiento} - {$origen->interno->nombre_completo}";
-                }
-                break;
-            case 'suministro':
-                $tituloOrigen = "Suministro #{$idOrigen}";
-                break;
-        }
-
-        // Si no se encuentra el origen
-        if (!$origen && $tipoOrigen !== 'suministro') {
-            return redirect()->back()->with('error', 'Origen no encontrado');
-        }
-
-        // Obtener dispensaciones
-        $dispensaciones = Dispensacion::with(['medicamento', 'material', 'interno', 'usuario'])
-            ->where('tipo_origen', $tipoOrigen)
-            ->where('id_origen', $idOrigen)
+        $dispensaciones = Dispensacion::where('tipo_origen', $request->tipo_origen)
+            ->where('id_origen', $request->id_origen)
+            ->with(['medicamento', 'material', 'usuario'])
             ->orderBy('fecha', 'desc')
-            ->orderBy('hora', 'desc')
             ->get();
 
-        return view('dispensaciones.por-origen', compact('dispensaciones', 'origen', 'tipoOrigen', 'idOrigen', 'tituloOrigen'));
-    }
-
-    /**
-     * Mostrar formulario para crear nueva dispensación
-     */
-    public function create(Request $request)
-    {
-        $tipoOrigen = $request->get('tipo_origen');
-        $idOrigen = $request->get('id_origen');
-
-        // Obtener información del origen
-        $origen = null;
-        switch ($tipoOrigen) {
+        // Definir título dinámico según el tipo de origen
+        switch ($request->tipo_origen) {
             case 'receta':
-                $origen = Receta::with(['interno'])->find($idOrigen);
+                $tituloOrigen = 'Receta N° ' . $request->id_origen;
                 break;
-            case 'tratamiento':
-                $origen = TratamientoCronico::with(['interno'])->find($idOrigen);
+            case 'tratamiento_cronicos':
+                $tituloOrigen = 'Tratamiento Crónico ID ' . $request->id_origen;
+                break;
+            case 'suministros_enfermeria':
+                $tituloOrigen = 'Suministro de Enfermería ID ' . $request->id_origen;
+                break;
+            default:
+                $tituloOrigen = 'Origen desconocido';
                 break;
         }
 
-        if (!$origen) {
-            return redirect()->back()->with('error', 'Origen no encontrado');
-        }
+        // Opcional: obtener más info del origen para mostrar en la vista
+        $origen = null;
+        if ($request->tipo_origen === 'receta') {
+            $origen = Receta::with('interno', 'medico')->find($request->id_origen);
+        } // puedes agregar elseif para otros tipos
 
-        $medicamentos = Medicamento::where('activo', 1)
-            ->orderBy('nombre')
-            ->get();
+        $tipoOrigen = $request->tipo_origen;
+        $idOrigen = $request->id_origen;
 
-        $materiales = MaterialesEnfermeria::where('activo', 1)
-            ->orderBy('nombre')
-            ->get();
-
-        return view('dispensaciones.create', compact('origen', 'tipoOrigen', 'idOrigen', 'medicamentos', 'materiales'));
+        return view('dispensaciones.por-origen', compact(
+            'dispensaciones',
+            'tituloOrigen',
+            'tipoOrigen',
+            'idOrigen',
+            'origen'
+        ));
     }
 
-    /**
-     * Guardar nueva dispensación
-     */
+    // Validación al crear dispensación
     public function store(Request $request)
     {
         $request->validate([
-            'tipo_origen' => 'required|in:receta,tratamiento,suministro',
+            'tipo_origen' => 'required|in:receta,tratamiento_cronicos,suministros_enfermeria',
             'id_origen' => 'required|integer',
             'id_interno' => 'required|exists:internos,id_interno',
+            'id_medicamento' => 'nullable|exists:medicamentos,id_medicamento',
+            'id_material' => 'nullable|exists:materiales_enfermeria,id_material',
             'cantidad' => 'required|numeric|min:0.01',
-            'unidad_medida' => 'nullable|string|max:30',
             'fecha' => 'required|date',
-            'observaciones' => 'nullable|string',
         ]);
 
-        // Validar que tenga medicamento O material (no ambos, no ninguno)
-        $tieneMedicamento = !empty($request->id_medicamento);
-        $tieneMaterial = !empty($request->id_material);
+        $dispensacion = Dispensacion::create($request->all() + ['id_usuario' => Auth::id()]);
 
-        if (!$tieneMedicamento && !$tieneMaterial) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'Debe seleccionar un medicamento o un material');
-        }
+        $this->validarIntegridad($request->tipo_origen, $request->id_origen);
 
-        if ($tieneMedicamento && $tieneMaterial) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'No puede seleccionar medicamento y material al mismo tiempo');
-        }
-
-        // Determinar si es psicotrópico
-        $esPsicotropico = 0;
-        if ($tieneMedicamento) {
-            $medicamento = Medicamento::find($request->id_medicamento);
-            $esPsicotropico = $medicamento->es_psicotropico ?? 0;
-        }
-
-        // Crear dispensación
-        Dispensacion::create([
-            'tipo_origen' => $request->tipo_origen,
-            'id_origen' => $request->id_origen,
-            'id_interno' => $request->id_interno,
-            'id_medicamento' => $request->id_medicamento,
-            'id_material' => $request->id_material,
-            'cantidad' => $request->cantidad,
-            'unidad_medida' => $request->unidad_medida,
-            'fecha' => $request->fecha,
-            'hora' => now()->format('H:i:s'),
-            'id_usuario' => Auth::id(),
-            'observaciones' => $request->observaciones,
-            'es_psicotropico' => $esPsicotropico,
-            'lote' => $request->lote,
-            'fecha_vencimiento' => $request->fecha_vencimiento,
-        ]);
-
-        return redirect()->route('dispensaciones.por-origen', [
-            'tipo_origen' => $request->tipo_origen,
-            'id_origen' => $request->id_origen
-        ])->with('success', 'Dispensación registrada correctamente');
+        return redirect()->route('voyager.dispensaciones.index')
+                         ->with('success', 'Dispensación creada');
     }
 
-    /**
-     * Mostrar listado general de dispensaciones
-     */
-    public function index(Request $request)
-    {
-        $query = Dispensacion::with(['medicamento', 'material', 'interno', 'usuario']);
-
-        // Filtros
-        if ($request->filled('tipo_origen')) {
-            $query->where('tipo_origen', $request->tipo_origen);
-        }
-
-        if ($request->filled('fecha_desde')) {
-            $query->where('fecha', '>=', $request->fecha_desde);
-        }
-
-        if ($request->filled('fecha_hasta')) {
-            $query->where('fecha', '<=', $request->fecha_hasta);
-        }
-
-        if ($request->filled('id_interno')) {
-            $query->where('id_interno', $request->id_interno);
-        }
-
-        $dispensaciones = $query->orderBy('fecha', 'desc')
-            ->orderBy('hora', 'desc')
-            ->paginate(50);
-
-        $internos = Interno::orderBy('apellido_paterno')
-            ->orderBy('apellido_materno')
-            ->orderBy('nombres')
-            ->get();
-
-        return view('dispensaciones.index', compact('dispensaciones', 'internos'));
-    }
-
-    /**
-     * Eliminar una dispensación
-     */
-    public function destroy($id)
+    // Validación al actualizar
+    public function update(Request $request, $id)
     {
         $dispensacion = Dispensacion::findOrFail($id);
+        $oldTipo = $dispensacion->tipo_origen;
+        $oldIdOrigen = $dispensacion->id_origen;
 
-        // Contar cuántas dispensaciones tiene el mismo origen
-        $count = Dispensacion::where('tipo_origen', $dispensacion->tipo_origen)
-            ->where('id_origen', $dispensacion->id_origen)
-            ->count();
+        $dispensacion->update($request->all());
 
-        // No permitir eliminar si es la única
-        if ($count <= 1) {
-            return redirect()->back()
-                ->with('error', 'No se puede eliminar la única dispensación. Debe haber al menos una dispensación por origen.');
-        }
+        $this->validarIntegridad($oldTipo, $oldIdOrigen);
 
-        $tipoOrigen = $dispensacion->tipo_origen;
+        return redirect()->route('voyager.dispensaciones.index')
+                         ->with('success', 'Dispensación actualizada');
+    }
+
+    // Validación al eliminar
+    public function destroy(Request $request, $id)
+    {
+        $dispensacion = Dispensacion::findOrFail($id);
+        $tipo = $dispensacion->tipo_origen;
         $idOrigen = $dispensacion->id_origen;
 
         $dispensacion->delete();
 
-        return redirect()->route('dispensaciones.por-origen', [
-            'tipo_origen' => $tipoOrigen,
-            'id_origen' => $idOrigen
-        ])->with('success', 'Dispensación eliminada correctamente');
+        $this->validarIntegridad($tipo, $idOrigen);
+
+        return redirect()->route('voyager.dispensaciones.index')
+                         ->with('success', 'Dispensación eliminada');
+    }
+
+    // Método privado para validar integridad
+    protected function validarIntegridad($tipo, $idOrigen)
+    {
+        $count = Dispensacion::where('tipo_origen', $tipo)
+                             ->where('id_origen', $idOrigen)
+                             ->count();
+
+        if ($count === 0) {
+            $origen = null;
+            if ($tipo === 'receta') {
+                $origen = Receta::find($idOrigen);
+            } elseif ($tipo === 'tratamiento_cronicos') {
+                $origen = TratamientoCronico::find($idOrigen);
+            }
+            // Nota: suministros_enfermeria pendiente de implementar
+
+            if ($origen) $origen->delete();
+        }
     }
 }

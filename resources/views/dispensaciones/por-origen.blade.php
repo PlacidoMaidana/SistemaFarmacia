@@ -40,13 +40,13 @@
                     @if($tipoOrigen == 'receta')
                         <div class="row">
                             <div class="col-md-4">
-                                <strong>Interno:</strong> {{ $origen->interno->nombre_completo ?? 'N/A' }}
+                                <strong>Interno:</strong> {{ $origen->interno->nombre_y_apellido ?? 'N/A' }}
                             </div>
                             <div class="col-md-4">
-                                <strong>Médico:</strong> {{ $origen->medico->nombre_completo ?? 'N/A' }}
+                                <strong>Médico:</strong> {{ $origen->medico->nombre_y_apellido ?? 'N/A' }}
                             </div>
                             <div class="col-md-4">
-                                <strong>Fecha Receta:</strong> {{ \Carbon\Carbon::parse($origen->fecha)->format('d/m/Y') }}
+                                <strong>Fecha Receta:</strong> {{ \Carbon\Carbon::parse($origen->fecha_emision)->format('d/m/Y') }}
                             </div>
                         </div>
                         @if($origen->diagnostico)
@@ -59,7 +59,7 @@
                     @elseif($tipoOrigen == 'tratamiento')
                         <div class="row">
                             <div class="col-md-4">
-                                <strong>Interno:</strong> {{ $origen->interno->nombre_completo ?? 'N/A' }}
+                                <strong>Interno:</strong> {{ $origen->interno->nombre_y_apellido ?? 'N/A' }}
                             </div>
                             <div class="col-md-4">
                                 <strong>Medicamento:</strong> {{ $origen->medicamento->nombre ?? 'N/A' }}
@@ -107,7 +107,7 @@
                                     <tr>
                                         <td>{{ \Carbon\Carbon::parse($dispensacion->fecha)->format('d/m/Y') }}</td>
                                         <td>{{ \Carbon\Carbon::parse($dispensacion->hora)->format('H:i') }}</td>
-                                        <td>{{ $dispensacion->interno->nombre_completo ?? 'N/A' }}</td>
+                                        <td>{{ $dispensacion->interno->nombre_y_apellido ?? 'N/A' }}</td>
                                         <td>
                                             @if($dispensacion->medicamento)
                                                 <span class="label label-primary">MED</span>
