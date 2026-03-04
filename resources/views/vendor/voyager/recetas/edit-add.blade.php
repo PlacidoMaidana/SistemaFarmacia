@@ -35,6 +35,29 @@
 
                     <div class="panel-body">
 
+                        @if (session('error'))
+                            <div class="alert alert-danger alert-dismissible fade in" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <strong>Error:</strong> {{ session('error') }}
+                            </div>
+                        @endif
+
+                        @if ($errors->any())
+                            <div class="alert alert-danger alert-dismissible fade in" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <strong>Error:</strong>
+                                <ul class="mb-0">
+                                    @foreach ($errors->all() as $error)
+                                        <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @endif
+
                         <!-- CAMPO MÉDICO -->
                         <div class="form-group">
                             <label>Médico <span class="text-danger">*</span></label>
@@ -137,8 +160,24 @@
 
                     </div>
 
-                    <div class="panel-footer text-right">
-                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    <div class="panel-footer">
+                        <div class="row">
+                            <div class="col-md-6">
+                                @if($isEdit && isset($data->id_receta))
+                                    <!-- BOTÓN VER DISPENSACIONES -->
+                                    <a href="{{ route('dispensaciones.por-origen', ['tipo_origen' => 'receta', 'id_origen' => $data->id_receta]) }}"
+                                       class="btn btn-info btn-sm"
+                                       title="Ver Dispensaciones">
+                                        <i class="voyager-list"></i> 
+                                        <span class="hidden-xs hidden-sm">Ver Dispensaciones</span>
+                                        <span class="badge">{{ $data->dispensaciones->count() ?? 0 }}</span>
+                                    </a>
+                                @endif
+                            </div>
+                            <div class="col-md-6 text-right">
+                                <button type="submit" class="btn btn-primary">Guardar</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -288,12 +327,21 @@ $(document).ready(function() {
     });
 
     // Validación cliente antes de submit
-        $('form').on('submit', function(e) {
+    $('form').on('submit', function(e) {
         var missing = [];
         if (!$('#id_interno').val()) missing.push('Interno');
         if (!$('#id_medico').val()) missing.push('Médico');
         if (!$('#fecha_emision').val()) missing.push('Fecha Emisión');
         if (!$('#tipo_receta').val()) missing.push('Tipo de Receta');
+        
+        @if($isEdit && isset($data->id_receta))
+        // Validar que tenga al menos una dispensación en modo edición
+        var dispensacionesCount = {{ $data->dispensaciones->count() ?? 0 }};
+        if (dispensacionesCount === 0) {
+            missing.push('Al menos una Dispensación');
+        }
+        @endif
+        
         if (!missing.length) return true;
         e.preventDefault();
         var msg = 'Complete los siguientes campos obligatorios: ' + missing.join(', ');

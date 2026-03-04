@@ -127,5 +127,16 @@ class Dispensacion extends Model
                 throw new \Exception('La dispensación no puede tener medicamento y material simultáneamente.');
             }
         });
+
+        // Registrar en auditoría antes de eliminar dispensaciones de psicotrópicos
+        static::deleting(function ($dispensacion) {
+            if ($dispensacion->es_psicotropico) {
+                \App\Models\AuditoriaPsicotropicos::crearRegistroAuditoria(
+                    $dispensacion, 
+                    'Eliminación manual de dispensación',
+                    'eliminacion'
+                );
+            }
+        });
     }
 }

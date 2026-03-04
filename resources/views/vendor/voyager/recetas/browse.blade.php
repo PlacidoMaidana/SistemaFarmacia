@@ -268,14 +268,14 @@
                                                     @include('voyager::bread.partials.actions', ['action' => $action])
                                                 @endif
                                             @endforeach
-                                        
-                                            <!-- BOTÓN PERSONALIZADO -->
-                                            <a href="{{ route('dispensaciones.por-origen', ['tipo_origen' => 'receta', 'id_origen' => $data->id_receta]) }}"
-                                               class="btn btn-primary btn-sm ml-1"
-                                               title="Ver Dispensaciones">
-                                                <i class="voyager-list"></i> 
-                                                <span class="hidden-xs hidden-sm">Ver Dispensaciones</span>
-                                            </a>
+                                            {{-- Botón personalizado para crear dispensación --}}
+                                            @can('add', app('App\Models\Dispensacion'))
+                                                <a href="{{ route('dispensaciones.create') }}?tipo_origen=receta&id_origen={{ $data->id_receta }}&id_interno={{ $data->id_interno }}" 
+                                                   class="btn btn-sm btn-success" 
+                                                   title="Crear Dispensación">
+                                                    <i class="voyager-plus"></i> <span class="hidden-xs hidden-sm">Crear Dispensación</span>
+                                                </a>
+                                            @endcan
                                         </td>
                                     </tr>
                                     @endforeach

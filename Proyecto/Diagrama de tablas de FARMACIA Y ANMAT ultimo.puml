@@ -1,0 +1,301 @@
+@startuml
+!theme plain
+
+' DIAGRAMA DE BASE DE DATOS - SISTEMA DE FARMACIA
+' Actualizado: Marzo 2026
+' 
+' NUEVAS ENTIDADES AGREGADAS:
+' - movimientos_stock: Sistema de kardex para control de stock
+' - recepciones_central: Recepciones desde Farmacia Central 
+' - recepciones_central_items: Items de cada recepción
+' 
+' MEJORAS REALIZADAS:
+' - Tipos de datos actualizados a decimal(8,2) para cantidades
+' - Enums definidos con valores específicos
+' - Relaciones corregidas y nuevas conexiones agregadas
+' - Campo movimiento_stock_id agregado a dispensaciones
+' - Timestamps agregados donde faltaban
+
+entity auditoria_psicotropicos {
+  *id_log : bigint
+  id_dispensacion : bigint
+  id_medicamento : int
+  accion : enum('DISPENSACION', 'ANULACION', 'CORRECCION')
+  cantidad : decimal(8,2)
+  saldo_anterior : decimal(8,2)
+  saldo_nuevo : decimal(8,2)
+  fecha : date
+  hora : time
+  id_usuario : int
+  nro_acta : varchar
+  observaciones : text
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity dispensaciones {
+  *id_dispensacion : bigint
+  tipo_origen : enum('RECETA', 'TRATAMIENTO_CRONICO', 'SUMINISTRO_ENFERMERIA')
+  id_origen : bigint
+  id_interno : int
+  id_medicamento : int
+  id_material : int
+  cantidad : decimal(8,2)
+  unidad_medida : varchar
+  fecha : date
+  hora : time
+  id_usuario : int
+  es_psicotropico : tinyint
+  nro_lote : varchar
+  fecha_vencimiento : date
+  nro_acta : varchar
+  observaciones : text
+  movimiento_stock_id : bigint
+  created_at : timestamp
+  updated_at : timestamp
+  deleted_at : timestamp
+}
+
+entity internos {
+  *id_interno : int
+  id_pabellon : int
+  lpu : varchar
+  nombre_y_apellido : varchar
+  documento : varchar
+  fecha_nacimiento : date
+  genero : char
+  fecha_ingreso : date
+  detalles : text
+  foto : blob
+  activo : tinyint
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity materiales_enfermeria {
+  *id_material : int
+  nombre : varchar
+  descripcion : text
+  codigo : varchar
+  unidad_medida : varchar
+  stock_actual : int
+  stock_minimo : int
+  ubicacion_fisica : varchar
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity medicamentos {
+  *id_medicamento : int
+  nombre : varchar
+  nombre_comercial : varchar
+  descripcion : text
+  codigo_barra : varchar
+  monodroga : varchar
+  concentracion : varchar
+  es_psicotropico : tinyint
+  es_estupefaciente : tinyint
+  tipo_control_anmat : varchar
+  id_presentacion : int
+  laboratorio : varchar
+  nro_registro_anmat : varchar
+  stock_actual : int
+  stock_minimo : int
+  stock_maximo : int
+  unidad_medida_base : varchar
+  ubicacion_fisica : varchar
+  fecha_vencimiento_principal : date
+  activo : tinyint
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity medicos {
+  *id_medico : int
+  nombre_y_apellido : varchar
+  especialidad : varchar
+  matricula : varchar
+  grado : varchar
+  escalafon : varchar
+  telefono : varchar
+  email : varchar
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity pabellon {
+  *id : int
+  pabellon : varchar
+  codigo : varchar
+  capacidad_maxima : int
+  unidad_alojamiento : varchar
+  tipo_pabellon : varchar
+  estado : varchar
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity presentaciones {
+  *id : int
+  nombre : varchar
+  detalles : text
+  requiere_refrigeracion : tinyint
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity recetas {
+  *id_receta : int
+  id_interno : int
+  id_medico : int
+  id_usuario : int
+  fecha_emision : date
+  numero_receta : varchar
+  tipo_receta : varchar
+  observaciones : text
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity suministros_enfermeria {
+  *id : int
+  nombre : varchar
+  cantidad : int
+  unidad_medida : varchar
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity translations {
+  *id : int
+  table_name : varchar
+  column_name : varchar
+  foreign_key : int
+  locale : varchar
+  value : text
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity tratamientos_cronicos {
+  *id : int
+  id_interno : int
+  id_medicamento : int
+  dosis : varchar
+  frecuencia : varchar
+  observaciones : text
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity unidades {
+  *id : int
+  nombre : varchar
+  codigo : varchar
+  responsable_nombre : varchar
+  telefono : varchar
+  email : varchar
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity users {
+  *id : int
+  name : varchar
+  email : varchar
+  password : varchar
+  role_id : int
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity movimientos_stock {
+  *id : bigint
+  tipo_movimiento : enum('INGRESO', 'EGRESO', 'BAJA_VENCIMIENTO', 'AJUSTE_INVENTARIO')
+  tipo_origen : enum('DISPENSACION', 'RECEPCION', 'AJUSTE', 'SISTEMA')
+  id_origen : bigint
+  id_medicamento : int
+  id_material : int
+  cantidad : decimal(8,2)
+  saldo_anterior : decimal(8,2)
+  saldo_actual : decimal(8,2)
+  nro_lote : varchar
+  fecha_vencimiento : date
+  observaciones : text
+  id_usuario : int
+  created_at : timestamp
+}
+
+entity recepciones_central {
+  *id_recepcion : bigint
+  nro_remito : varchar
+  fecha_recepcion : date
+  estado : enum('BORRADOR', 'CONFIRMADA', 'ANULADA')
+  observaciones : text
+  id_usuario_creador : int
+  id_usuario_confirmador : int
+  id_usuario_anulador : int
+  fecha_confirmacion : timestamp
+  fecha_anulacion : timestamp
+  created_at : timestamp
+  updated_at : timestamp
+}
+
+entity recepciones_central_items {
+  *id_item : bigint
+  id_recepcion : bigint
+  tipo_item : enum('MEDICAMENTO', 'MATERIAL')
+  id_medicamento : int
+  id_material : int
+  cantidad : decimal(8,2)
+  nro_lote : varchar
+  fecha_vencimiento : date
+  movimiento_stock_id : bigint
+  created_at : timestamp
+}
+
+' Relaciones principales existentes
+dispensaciones }o--|| internos : "id_interno"
+dispensaciones }o--|| medicamentos : "id_medicamento"
+dispensaciones }o--|| materiales_enfermeria : "id_material"
+dispensaciones }o--|| users : "id_usuario"
+auditoria_psicotropicos }o--|| dispensaciones : "id_dispensacion"
+auditoria_psicotropicos }o--|| medicamentos : "id_medicamento"
+auditoria_psicotropicos }o--|| users : "id_usuario"
+medicamentos }o--|| presentaciones : "id_presentacion"
+recetas }o--|| internos : "id_interno"
+recetas }o--|| medicos : "id_medico"
+recetas }o--|| users : "id_usuario"
+internos }o--|| pabellon : "id_pabellon"
+pabellon }o--|| unidades : "unidad_alojamiento"
+tratamientos_cronicos }o--|| internos : "id_interno"
+tratamientos_cronicos }o--|| medicamentos : "id_medicamento"
+
+' Relaciones uno a muchos con dispensaciones
+recetas ||--o{ dispensaciones : "genera"
+suministros_enfermeria ||--o{ dispensaciones : "incluye"
+tratamientos_cronicos ||--o{ dispensaciones : "requiere"
+
+' NUEVAS RELACIONES - Sistema de Stock y Recepciones
+' Movimientos de Stock
+movimientos_stock }o--|| medicamentos : "id_medicamento"
+movimientos_stock }o--|| materiales_enfermeria : "id_material"
+movimientos_stock }o--|| users : "id_usuario"
+dispensaciones }o--|| movimientos_stock : "movimiento_stock_id"
+
+' Recepciones Central
+recepciones_central }o--|| users : "id_usuario_creador"
+recepciones_central }o--|| users : "id_usuario_confirmador"
+recepciones_central }o--|| users : "id_usuario_anulador"
+recepciones_central ||--o{ recepciones_central_items : "contiene"
+
+' Items de Recepciones
+recepciones_central_items }o--|| recepciones_central : "id_recepcion"
+recepciones_central_items }o--|| medicamentos : "id_medicamento"
+recepciones_central_items }o--|| materiales_enfermeria : "id_material"
+recepciones_central_items }o--|| movimientos_stock : "movimiento_stock_id"
+
+' Relación de recepciones con movimientos de stock
+recepciones_central ||--o{ movimientos_stock : "genera_movimientos"
+
+@enduml

@@ -128,8 +128,8 @@
                                         <td>
                                             {{ number_format($dispensacion->cantidad, 2) }} 
                                             {{ $dispensacion->unidad_medida }}
-                                            @if($dispensacion->lote)
-                                                <br><small class="text-muted">Lote: {{ $dispensacion->lote }}</small>
+                                            @if($dispensacion->nro_lote)
+                                                <br><small class="text-muted">Lote: {{ $dispensacion->nro_lote }}</small>
                                             @endif
                                             @if($dispensacion->fecha_vencimiento)
                                                 <br><small class="text-muted">Venc: {{ \Carbon\Carbon::parse($dispensacion->fecha_vencimiento)->format('d/m/Y') }}</small>

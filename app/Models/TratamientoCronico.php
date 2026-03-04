@@ -47,13 +47,34 @@ class TratamientoCronico extends Model
     }
 
     /**
-     * Validar que tenga al menos una dispensación antes de eliminar
+     * Validar que tenga al menos una dispensación
      */
     protected static function booted()
     {
         parent::booted();
 
+        // Validación para actualización: un tratamiento editado debe tener al menos una dispensación
+        static::updating(function ($model) {
+            $dispensacionesCount = $model->dispensaciones()->count();
+            if ($dispensacionesCount === 0) {
+                throw new \Exception('No se puede guardar el tratamiento. Debe tener al menos una dispensación registrada.');
+            }
+        });
+
         static::deleting(function ($tratamiento) {
+            // Crear registros de auditoría para psicotrópicos antes de eliminar
+            $dispensacionesPsicotropicas = $tratamiento->dispensaciones()
+                ->where('es_psicotropico', 1)
+                ->get();
+
+            foreach ($dispensacionesPsicotropicas as $dispensacion) {
+                \App\Models\AuditoriaPsicotropicos::crearRegistroAuditoria(
+                    $dispensacion,
+                    'Eliminación por eliminación de tratamiento #' . $tratamiento->id_tratamiento,
+                    'eliminacion'
+                );
+            }
+
             // Eliminar dispensaciones asociadas en cascada
             $tratamiento->dispensaciones()->delete();
         });

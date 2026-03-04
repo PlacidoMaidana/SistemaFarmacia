@@ -59,6 +59,45 @@ class DispensacionController extends VoyagerBaseController
         ));
     }
 
+    /**
+     * Mostrar formulario para crear nueva dispensación
+     */
+    public function create(Request $request)
+    {
+        $tipoOrigen = $request->get('tipo_origen');
+        $idOrigen = $request->get('id_origen');
+
+        // Validar parámetros
+        if (!$tipoOrigen || !$idOrigen) {
+            return redirect()->back()->with('error', 'Parámetros inválidos');
+        }
+
+        // Obtener información del origen
+        $origen = null;
+        switch ($tipoOrigen) {
+            case 'receta':
+                $origen = Receta::with(['interno', 'medico'])->find($idOrigen);
+                break;
+            case 'tratamiento_cronicos':
+                $origen = TratamientoCronico::with(['interno'])->find($idOrigen);
+                break;
+        }
+
+        if (!$origen) {
+            return redirect()->back()->with('error', 'Origen no encontrado');
+        }
+
+        // Obtener medicamentos y materiales
+        $medicamentos = \App\Models\Medicamento::where('activo', 1)
+            ->orderBy('nombre')
+            ->get();
+
+        $materiales = \App\Models\MaterialesEnfermeria::orderBy('nombre')
+            ->get();
+
+        return view('dispensaciones.create', compact('origen', 'tipoOrigen', 'idOrigen', 'medicamentos', 'materiales'));
+    }
+
     // Validación al crear dispensación
     public function store(Request $request)
     {
@@ -70,14 +109,57 @@ class DispensacionController extends VoyagerBaseController
             'id_material' => 'nullable|exists:materiales_enfermeria,id_material',
             'cantidad' => 'required|numeric|min:0.01',
             'fecha' => 'required|date',
+            'unidad_medida' => 'nullable|string|max:30',
+            'observaciones' => 'nullable|string',
+            'nro_lote' => 'nullable|string|max:50',
+            'fecha_vencimiento' => 'nullable|date',
         ]);
 
-        $dispensacion = Dispensacion::create($request->all() + ['id_usuario' => Auth::id()]);
+        // Validar que tenga medicamento O material (no ambos, no ninguno)
+        $tieneMedicamento = !empty($request->id_medicamento);
+        $tieneMaterial = !empty($request->id_material);
 
-        $this->validarIntegridad($request->tipo_origen, $request->id_origen);
+        if (!$tieneMedicamento && !$tieneMaterial) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Debe seleccionar un medicamento o un material');
+        }
 
-        return redirect()->route('voyager.dispensaciones.index')
-                         ->with('success', 'Dispensación creada');
+        if ($tieneMedicamento && $tieneMaterial) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'No puede seleccionar medicamento y material al mismo tiempo');
+        }
+
+        // Determinar si es psicotrópico
+        $esPsicotropico = 0;
+        if ($tieneMedicamento) {
+            $medicamento = \App\Models\Medicamento::find($request->id_medicamento);
+            $esPsicotropico = $medicamento->es_psicotropico ?? 0;
+        }
+
+        // Crear dispensación
+        Dispensacion::create([
+            'tipo_origen' => $request->tipo_origen,
+            'id_origen' => $request->id_origen,
+            'id_interno' => $request->id_interno,
+            'id_medicamento' => $request->id_medicamento,
+            'id_material' => $request->id_material,
+            'cantidad' => $request->cantidad,
+            'unidad_medida' => $request->unidad_medida,
+            'fecha' => $request->fecha,
+            'hora' => now()->format('H:i:s'),
+            'id_usuario' => Auth::id(),
+            'observaciones' => $request->observaciones,
+            'es_psicotropico' => $esPsicotropico,
+            'nro_lote' => $request->nro_lote,
+            'fecha_vencimiento' => $request->fecha_vencimiento,
+        ]);
+
+        return redirect()->route('dispensaciones.por-origen', [
+            'tipo_origen' => $request->tipo_origen,
+            'id_origen' => $request->id_origen
+        ])->with('success', 'Dispensación creada correctamente');
     }
 
     // Validación al actualizar
@@ -91,8 +173,10 @@ class DispensacionController extends VoyagerBaseController
 
         $this->validarIntegridad($oldTipo, $oldIdOrigen);
 
-        return redirect()->route('voyager.dispensaciones.index')
-                         ->with('success', 'Dispensación actualizada');
+        return redirect()->route('dispensaciones.por-origen', [
+            'tipo_origen' => $dispensacion->tipo_origen,
+            'id_origen' => $dispensacion->id_origen
+        ])->with('success', 'Dispensación actualizada correctamente');
     }
 
     // Validación al eliminar
@@ -102,12 +186,25 @@ class DispensacionController extends VoyagerBaseController
         $tipo = $dispensacion->tipo_origen;
         $idOrigen = $dispensacion->id_origen;
 
+        // Contar cuántas dispensaciones tiene el mismo origen
+        $count = Dispensacion::where('tipo_origen', $tipo)
+            ->where('id_origen', $idOrigen)
+            ->count();
+
+        // No permitir eliminar si es la única
+        if ($count <= 1) {
+            return redirect()->route('dispensaciones.por-origen', [
+                'tipo_origen' => $tipo,
+                'id_origen' => $idOrigen
+            ])->with('error', 'No se puede eliminar la única dispensación. Debe haber al menos una dispensación por origen.');
+        }
+
         $dispensacion->delete();
 
-        $this->validarIntegridad($tipo, $idOrigen);
-
-        return redirect()->route('voyager.dispensaciones.index')
-                         ->with('success', 'Dispensación eliminada');
+        return redirect()->route('dispensaciones.por-origen', [
+            'tipo_origen' => $tipo,
+            'id_origen' => $idOrigen
+        ])->with('success', 'Dispensación eliminada correctamente');
     }
 
     // Método privado para validar integridad

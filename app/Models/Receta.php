@@ -116,5 +116,32 @@ class Receta extends Model
                 // no-op: if storing fails, ignore so save can continue (you may log in future)
             }
         });
+
+        // Validación para actualización: una receta editada debe tener al menos una dispensación
+        static::updating(function ($model) {
+            $dispensacionesCount = $model->dispensaciones()->count();
+            if ($dispensacionesCount === 0) {
+                throw new \Exception('No se puede guardar la receta. Debe tener al menos una dispensación registrada.');
+            }
+        });
+
+        // Eliminar dispensaciones en cascada al eliminar receta
+        static::deleting(function ($model) {
+            // Crear registros de auditoría para psicotrópicos antes de eliminar
+            $dispensacionesPsicotropicas = $model->dispensaciones()
+                ->where('es_psicotropico', 1)
+                ->get();
+
+            foreach ($dispensacionesPsicotropicas as $dispensacion) {
+                \App\Models\AuditoriaPsicotropicos::crearRegistroAuditoria(
+                    $dispensacion,
+                    'Eliminación por eliminación de receta #' . $model->id_receta,
+                    'eliminacion'
+                );
+            }
+
+            // Eliminar todas las dispensaciones asociadas
+            $model->dispensaciones()->delete();
+        });
     }
 }
